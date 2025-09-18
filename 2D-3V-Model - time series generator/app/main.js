@@ -886,9 +886,9 @@ function loadWebGL()
  */
  
 	var tau_pw_will = [350];
-	var tau_d_will = [0.4085,0.409,0.4095];
+	var tau_d_will = [0.410];
 
-    env.tau_d = 0.408
+    env.tau_d = 0.410
     Abubu.setUniformInSolvers('tau_d', env.tau_d,[env.comp1,env.comp2 ]) ;	
 
     var tau_pw_will_order = 0;
@@ -907,7 +907,7 @@ function loadWebGL()
 	var will_m = 0
 
     const startTime = 100000; // 200000;
-    const duration = 20000;    // actual measurement length
+    const duration = 100000;    // actual measurement length
     const repeats = 5;
 
     env.render = function(){
