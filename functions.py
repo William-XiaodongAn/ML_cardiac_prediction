@@ -5,6 +5,7 @@ import subprocess
 import re
 from pathlib import Path
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
+from scipy import stats
 
 def linear_interpolation(y0,y1,x0,x1,x):
     
@@ -130,6 +131,39 @@ def read_output_dat_d2(path):
     if cur is not None and xs:
         dims[cur] = (np.asarray(xs, float), np.asarray(ys, float))
     return dims
+def read_output_dat_lya(file_path):
+    output = {}
+    x_data = []
+    y_data = []
+    current_epsilon = None
+    current_dim = None
+    with open(file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue # Skip empty lines
+
+            # Check if the line is a header
+            if line.startswith('#'):
+                # Reset data lists for the new block
+                x_data = []
+                y_data = []
+                
+                # Parse the new epsilon value from the header line
+                pattern = r"epsilon=\s*(?P<epsilon>[0-9.eE+-]+)\s*dim=\s*(?P<dim>\d+)"
+
+                # --- Perform a single search ---
+                match = re.search(pattern, line)
+                if match:       
+                    current_epsilon = float(match.group("epsilon"))
+                    current_dim = int(match.group("dim"))
+            else:
+                # If it's a data line, parse it
+                parts = line.split()
+                x_data.append(int(parts[0]))
+                y_data.append(float(parts[1]))
+                output[(current_epsilon, current_dim)] = (np.array(x_data), np.array(y_data))
+    return output
 
 def load_voltage(path_to_csv):
     # ---- load voltage data from csv file ----
@@ -178,6 +212,44 @@ def load_voltage(path_to_csv):
             voltage[i][j] = data[j * rows +  i]
 
     return voltage[0]
+
+def plot_lya(voltage,x1 = 0,x2 = 10,save_fig = False, fig_nam = "D2_plot.png"):
+    '''
+    voltage, x1, x2,fig_num: voltage signal, x1 and x2 are the range to calculate plateau average
+    calculate D2 plateau average from library of (logx,yy) per dimension and update the horizontal line of average plateau
+    '''
+    with open("output.dat", "w") as f:
+        for val in voltage:
+            f.write(f"{val}\n")
+
+    proc = subprocess.Popen(
+        ["lyap_k", "output.dat", "-M3","-m3"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
+    )
+
+    for line in proc.stdout:
+        print(line, end="")   # prints each line as lyap_k produces it    
+    # --- usage ---
+    output_dict = read_output_dat_lya("output.dat.lyap")   # <- put your path here
+
+    plt.figure()
+    max_epsilon = max(epsilon for epsilon,d in output_dict)
+    x, y = output_dict[(max_epsilon,3)]
+    xx = x
+    yy   = y
+    mask = (xx >= x1) & (xx <= x2)
+    
+    plt.plot(x, y, label=f"epsilon {max_epsilon}, dim 3")  
+    
+    x_points = [xx[mask][0], xx[mask][-1]]
+    y_points = [yy[mask][0], yy[mask][-1]]
+    # calculate average slope between x1 and x2 and plot it
+    slope = stats.linregress(xx[mask], yy[mask]).slope
+    # plot the slope line
+    plt.plot(x_points, y_points, 'k--', label=f"Slope ≈ {slope:.3f}")
+    return slope
 
 def cal_D2(voltage,x1 = -6,x2 = -2,save_fig = False, fig_nam = "D2_plot.png"):
     '''
